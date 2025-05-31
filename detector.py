@@ -1,189 +1,222 @@
 import os
 import cv2
 from ultralytics import YOLO
-import shutil  # Opcional, si decides limpiar carpetas
-import glob  # Para buscar archivos
+import shutil
+import glob
+import numpy as np  # Necesario para el manejo de arrays de YOLO y colores
+import matplotlib.pyplot as plt  # Necesario para el colormap
 
 print("Paso 0: Librerías importadas correctamente.")
 
 # ==============================================================================
-# PASO 1: CONFIGURACIÓN DE RUTAS
+# PASO 1: CONFIGURACIÓN DE RUTAS Y PARÁMETROS
 # ==============================================================================
-print("\nPaso 1: Configurando rutas...")
+print("\nPaso 1: Configurando rutas y parámetros...")
 
-# Rutas para tu entorno local (ajusta si es necesario)
-MODEL_PATH = 'F:/Documents/PycharmProjects/Deteccion/best.pt'  # <<<< VERIFICA ESTA RUTA
-VIDEO_INPUT_PATH = 'F:\Documents\PycharmProjects\Deteccion\GH012372_no_audio.mp4'  # <<<< VERIFICA ESTA RUTA
+MODEL_PATH_VEHICLES = 'F:/Documents/PycharmProjects/Deteccion/best.pt'
+VIDEO_INPUT_PATH = 'F:/Documents/PycharmProjects/Deteccion/GH012372_no_audio.mp4'  # Usa el video sin audio o re-codificado
 
-# Carpeta local donde se guardarán los resultados (similar al script original)
-OUTPUT_PROJECT_DIR = "./runs_original_working_structure/detect_video"
-VIDEO_BASENAME_NO_EXT_ORIG = os.path.splitext(os.path.basename(VIDEO_INPUT_PATH))[0]
-OUTPUT_RUN_NAME = f"{VIDEO_BASENAME_NO_EXT_ORIG}_processed_original"  # Mantener estructura de nombre
+# Carpeta para el video de salida procesado manualmente
+OUTPUT_DIR_MANUAL = "./runs_local/manual_video_processing"
+os.makedirs(OUTPUT_DIR_MANUAL, exist_ok=True)
+VIDEO_BASENAME = os.path.splitext(os.path.basename(VIDEO_INPUT_PATH))[0]
+VIDEO_OUTPUT_PATH_MANUAL = os.path.join(OUTPUT_DIR_MANUAL, f"{VIDEO_BASENAME}_annotated_distance.mp4")
 
-# Crear directorio base si no existe
-os.makedirs(OUTPUT_PROJECT_DIR, exist_ok=True)
+print(f"Modelo de vehículos: {os.path.abspath(MODEL_PATH_VEHICLES)}")
+print(f"Video de entrada: {os.path.abspath(VIDEO_INPUT_PATH)}")
+print(f"Video de salida se guardará en: {os.path.abspath(VIDEO_OUTPUT_PATH_MANUAL)}")
 
-# Opcional: Limpiar la carpeta del run específico si quieres un inicio limpio cada vez.
-# Esto es útil si exist_ok=True y no quieres que YOLO simplemente sobrescriba.
-# output_run_folder_to_clean_orig = os.path.join(OUTPUT_PROJECT_DIR, OUTPUT_RUN_NAME)
-# if os.path.exists(output_run_folder_to_clean_orig):
-#     print(f"Limpiando directorio de run previo: {output_run_folder_to_clean_orig}")
-#     shutil.rmtree(output_run_folder_to_clean_orig)
+# Parámetros de inferencia y visualización
+CONFIDENCE_THRESHOLD = 0.35
+FOCAL_LENGTH_PX = 700  # <<<< AJUSTA ESTO PARA TU CÁMARA!
+REAL_OBJECT_SIZES_M = {
+    # De tu modelo de vehículos
+    'car': 1.8, 'threewheel': 1.2, 'bus': 2.5, 'truck': 2.6, 'motorbike': 0.8, 'van': 2.0,
+    # De COCO (asegúrate que los nombres coincidan con model_coco.names)
+    'person': 0.5, 'bicycle': 0.4, 'dog': 0.3
+}  # <<<< AJUSTA ESTOS VALORES!
 
-
-print(f"Ruta del modelo: {os.path.abspath(MODEL_PATH)}")
-print(f"Ruta del video de entrada: {os.path.abspath(VIDEO_INPUT_PATH)}")
-print(
-    f"Resultados se guardarán en la carpeta de run: {os.path.abspath(os.path.join(OUTPUT_PROJECT_DIR, OUTPUT_RUN_NAME))}")
-
-# ==============================================================================
-# PASO 2: CARGAR EL MODELO
-# ==============================================================================
-print("\nPaso 2: Cargando el modelo...")
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(f"Modelo no encontrado en: {MODEL_PATH}")
-
-model = YOLO(MODEL_PATH)
-print(f"Modelo '{MODEL_PATH}' cargado correctamente.")
-print(f"Clases conocidas por el modelo: {model.names}")
+COCO_CLASSES_TO_SEEK = ['person', 'bicycle', 'dog']  # Clases de COCO que nos interesan
 
 # ==============================================================================
-# PASO 3: VERIFICAR VIDEO DE ENTRADA
+# PASO 2: CARGAR LOS MODELOS
 # ==============================================================================
-print("\nPaso 3: Verificando video de entrada...")
+print("\nPaso 2: Cargando modelos...")
+
+# Cargar tu modelo fine-tuned para vehículos
+if not os.path.exists(MODEL_PATH_VEHICLES):
+    raise FileNotFoundError(f"Modelo de vehículos no encontrado en: {MODEL_PATH_VEHICLES}")
+model_vehicles = YOLO(MODEL_PATH_VEHICLES)
+print(f"Modelo de vehículos '{MODEL_PATH_VEHICLES}' cargado. Clases: {model_vehicles.names}")
+
+# Cargar modelo COCO pre-entrenado
+model_coco = YOLO('yolov8n.pt')
+print(f"Modelo COCO 'yolov8n.pt' cargado.")
+# print(f"Clases COCO: {model_coco.names}") # Descomenta para ver todas
+
+# Obtener los IDs de las clases de COCO que nos interesan
+coco_target_ids = []
+if isinstance(model_coco.names, dict):
+    for name_to_seek in COCO_CLASSES_TO_SEEK:
+        found_id = None
+        for class_id_coco, class_name_coco in model_coco.names.items():
+            if class_name_coco == name_to_seek:
+                found_id = class_id_coco
+                break
+        if found_id is not None:
+            coco_target_ids.append(found_id)
+        else:
+            print(f"ADVERTENCIA: Clase COCO '{name_to_seek}' no encontrada en model_coco.names.")
+else:  # Fallback por si model.names no es dict (raro)
+    for name_to_seek in COCO_CLASSES_TO_SEEK:
+        try:
+            coco_target_ids.append(model_coco.names.index(name_to_seek))
+        except ValueError:
+            print(f"ADVERTENCIA: Clase COCO '{name_to_seek}' no encontrada (names como lista).")
+print(f"IDs de clases COCO a detectar: {coco_target_ids}")
+
+# ==============================================================================
+# PASO 3: INICIAR PROCESAMIENTO DE VIDEO MANUAL
+# ==============================================================================
+print("\nPaso 3: Iniciando procesamiento manual del video...")
+
 if not os.path.exists(VIDEO_INPUT_PATH):
     raise FileNotFoundError(f"Video de entrada no encontrado en: {VIDEO_INPUT_PATH}")
 
-try:
-    cap = cv2.VideoCapture(VIDEO_INPUT_PATH)
-    if not cap.isOpened():
-        raise IOError(f"No se pudo abrir el video: {VIDEO_INPUT_PATH}")
+cap = cv2.VideoCapture(VIDEO_INPUT_PATH)
+if not cap.isOpened():
+    raise IOError(f"No se pudo abrir el video de entrada: {VIDEO_INPUT_PATH}")
 
-    fps_orig = cap.get(cv2.CAP_PROP_FPS)
-    width_orig = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height_orig = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frame_count_orig = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration_seconds_orig = frame_count_orig / fps_orig if fps_orig > 0 else 0
-    print(
-        f"Video verificado: {width_orig}x{height_orig} @ {fps_orig:.2f} FPS, Frames: {frame_count_orig}, Duración: ~{duration_seconds_orig:.2f}s")
+# Obtener propiedades del video para el VideoWriter
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps_input = cap.get(cv2.CAP_PROP_FPS)
+total_frames_input = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+fps_output = fps_input if fps_input > 0 else 30.0
+
+print(f"Video de entrada: {frame_width}x{frame_height} @ {fps_input:.2f} FPS, Total Frames: {total_frames_input}")
+
+# Definir el codec y crear el objeto VideoWriter
+# 'mp4v' es un buen codec para .mp4. Si falla, prueba 'XVID' (y cambia extensión a .avi)
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out_video = cv2.VideoWriter(VIDEO_OUTPUT_PATH_MANUAL, fourcc, fps_output, (frame_width, frame_height))
+
+if not out_video.isOpened():
     cap.release()
-except Exception as e_verif_orig:
-    print(f"Error al verificar el video: {e_verif_orig}")
-    raise
+    raise IOError(f"No se pudo abrir el VideoWriter para el archivo de salida: {VIDEO_OUTPUT_PATH_MANUAL}")
 
-# ==============================================================================
-# PASO 4: PROCESAR VIDEO CON YOLO.PREDICT
-# (Usando los mismos parámetros que el script que dijiste que funcionó)
-# ==============================================================================
-print("\nPaso 4: Procesando video con YOLO.predict (save=True)...")
-
-CONF_ORIG = 0.3  # Parámetro del script que funcionó
-IOU_ORIG = 0.5  # Parámetro del script que funcionó
-# El script original no especificaba imgsz, así que YOLO usaría su default o el tamaño del modelo.
-# Para replicar, no lo especificaremos aquí tampoco inicialmente.
-
-processed_frames_orig = 0
-actual_run_save_dir_orig = None  # Para almacenar la ruta del directorio donde YOLO guarda
+print(f"Procesando video y guardando en: {VIDEO_OUTPUT_PATH_MANUAL}")
+frames_processed_count = 0
+frames_written_count = 0
 
 try:
-    results_generator_orig = model.predict(
-        source=VIDEO_INPUT_PATH,
-        stream=True,
-        save=True,
-        project=OUTPUT_PROJECT_DIR,
-        name=OUTPUT_RUN_NAME,
-        exist_ok=True,  # Importante para poder re-ejecutar sin que cree carpetas ...2, ...3
-        conf=CONF_ORIG,
-        iou=IOU_ORIG
-        # No se especifica imgsz para replicar el script original que funcionó.
-        # Si ese script tenía un imgsz implícito o si tu modelo tiene un tamaño fijo, YOLO lo usará.
-        # Puedes añadir imgsz=640 si crees que es necesario o estaba implícito.
-    )
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            print(f"Fin del video o error de lectura en el frame {frames_processed_count + 1}.")
+            break
 
-    print(f"Iterando sobre los resultados de la predicción del video '{os.path.basename(VIDEO_INPUT_PATH)}'...")
-    for i, result_orig in enumerate(results_generator_orig):
-        processed_frames_orig += 1
-        if i == 0:
-            if hasattr(result_orig, 'save_dir') and result_orig.save_dir:
-                actual_run_save_dir_orig = result_orig.save_dir
-                print(f"  Directorio de guardado para este run: {actual_run_save_dir_orig}")
+        frames_processed_count += 1
+        annotated_frame = frame.copy()
+        all_detections_current_frame = []  # Para este frame
 
-        if (processed_frames_orig) % 100 == 0:
-            print(f"  Procesado frame {processed_frames_orig}...")
+        # 1. Inferencia con modelo de vehículos
+        results_v = model_vehicles.predict(source=frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
+        if results_v:
+            res_v_data = results_v[0]  # El resultado para el frame
+            for box_v_data in res_v_data.boxes:
+                all_detections_current_frame.append({
+                    "xywh": box_v_data.xywh.cpu().numpy()[0],
+                    "cls_id": int(box_v_data.cls.cpu().item()),
+                    "conf": float(box_v_data.conf.cpu().item()),
+                    "model_names_map": model_vehicles.names,
+                    "is_vehicle": True  # Flag para diferenciar
+                })
 
-    print(f"Procesamiento de video con YOLO.predict completado. Total de frames procesados: {processed_frames_orig}")
+        # 2. Inferencia con modelo COCO (si hay clases objetivo)
+        if coco_target_ids:
+            results_c = model_coco.predict(source=frame, conf=CONFIDENCE_THRESHOLD, classes=coco_target_ids,
+                                           verbose=False)
+            if results_c:
+                res_c_data = results_c[0]
+                for box_c_data in res_c_data.boxes:
+                    all_detections_current_frame.append({
+                        "xywh": box_c_data.xywh.cpu().numpy()[0],
+                        "cls_id": int(box_c_data.cls.cpu().item()),  # ID relativo a model_coco.names
+                        "conf": float(box_c_data.conf.cpu().item()),
+                        "model_names_map": model_coco.names,
+                        "is_vehicle": False  # Flag para diferenciar
+                    })
 
-except Exception as e_proc_orig:
-    print(f"Ocurrió un error durante el procesamiento del video con YOLO.predict: {e_proc_orig}")
+        # 3. Dibujar todas las detecciones del frame actual
+        for det in all_detections_current_frame:
+            x_c, y_c, w, h = det["xywh"]
+            cls_id = det["cls_id"]
+            conf_val = det["conf"]
+            current_model_names = det["model_names_map"]
+
+            label_name = current_model_names[cls_id]
+
+            x1, y1 = int(x_c - w / 2), int(y_c - h / 2)
+            x2, y2 = int(x_c + w / 2), int(y_c + h / 2)
+
+            # Color (simple: verde para vehículos, azul para COCO)
+            box_clr = (0, 255, 0) if det["is_vehicle"] else (255, 0, 0)
+
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), box_clr, 2)
+
+            dist_m = -1
+            if label_name in REAL_OBJECT_SIZES_M and REAL_OBJECT_SIZES_M[label_name] > 0:
+                w_real_m = REAL_OBJECT_SIZES_M[label_name]
+                if w > 0: dist_m = (w_real_m * FOCAL_LENGTH_PX) / w
+
+            txt_lbl = f"{label_name} {conf_val:.2f}"
+            if dist_m > 0: txt_lbl += f" {dist_m:.1f}m"
+
+            (txt_w, txt_h), _ = cv2.getTextSize(txt_lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(annotated_frame, (x1, y1 - txt_h - 4), (x1 + txt_w, y1 - 2), box_clr, -1)
+            cv2.putText(annotated_frame, txt_lbl, (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1,
+                        cv2.LINE_AA)
+
+        # 4. Escribir el frame anotado
+        out_video.write(annotated_frame)
+        frames_written_count += 1
+
+        if frames_processed_count % (int(fps_output) * 5) == 0:  # Progreso cada ~5 segundos
+            print(f"  Procesado y escrito frame {frames_processed_count}/{total_frames_input}...")
+
+except Exception as e_proc_manual:
+    print(f"Error durante el procesamiento manual del video: {e_proc_manual}")
     import traceback
 
     traceback.print_exc()
+finally:
+    print(f"\nCerrando archivos de video...")
+    cap.release()
+    out_video.release()
+    cv2.destroyAllWindows()  # Aunque no se muestren ventanas, es buena práctica
 
-# ==============================================================================
-# PASO 5: ENCONTRAR Y MOSTRAR RUTA DEL VIDEO DE SALIDA (LÓGICA MEJORADA)
-# ==============================================================================
-print("\nPaso 5: Buscando el video de salida procesado...")
+print(f"\nProcesamiento manual de video completado.")
+print(f"Total frames leídos del video de entrada: {frames_processed_count}")
+print(f"Total frames escritos en el video de salida: {frames_written_count}")
 
-video_output_path_found_orig = None
+if os.path.exists(VIDEO_OUTPUT_PATH_MANUAL) and frames_written_count > 0:
+    print(f"\n✅ Video procesado manualmente guardado en:")
+    print(f"   {os.path.abspath(VIDEO_OUTPUT_PATH_MANUAL)}")
 
-if actual_run_save_dir_orig and os.path.isdir(actual_run_save_dir_orig):
-    print(f"  Buscando video en el directorio del run: {actual_run_save_dir_orig}")
-    video_extensions_orig = ('.mp4', '.avi', '.mov', '.mkv')
-    found_videos_in_run_orig = []
-    for f_name_orig in os.listdir(actual_run_save_dir_orig):
-        if f_name_orig.lower().endswith(video_extensions_orig):
-            found_videos_in_run_orig.append(f_name_orig)
-
-    if found_videos_in_run_orig:
-        input_video_basename_no_ext_orig_match = os.path.splitext(os.path.basename(VIDEO_INPUT_PATH))[0]
-        for video_file_orig in found_videos_in_run_orig:
-            if os.path.splitext(video_file_orig)[0] == input_video_basename_no_ext_orig_match:
-                video_output_path_found_orig = os.path.join(actual_run_save_dir_orig, video_file_orig)
-                break
-        if not video_output_path_found_orig and found_videos_in_run_orig:
-            video_output_path_found_orig = os.path.join(actual_run_save_dir_orig, found_videos_in_run_orig[0])
-
-        if video_output_path_found_orig:
-            print(f"  Video de salida detectado automáticamente: {video_output_path_found_orig}")
-        else:
-            print(
-                f"  ⚠️ No se pudo determinar el nombre específico del video de salida en '{actual_run_save_dir_orig}', aunque se encontraron archivos de video: {found_videos_in_run_orig}")
-            if found_videos_in_run_orig:  # Si no se pudo matchear por nombre pero hay videos, toma el primero.
-                video_output_path_found_orig = os.path.join(actual_run_save_dir_orig, found_videos_in_run_orig[0])
-                print(f"  Usando el primer video encontrado: {video_output_path_found_orig}")
-
-    else:
-        print(
-            f"  ⚠️ No se encontraron archivos de video ({', '.join(video_extensions_orig)}) en: {actual_run_save_dir_orig}")
-else:
-    # Fallback si actual_run_save_dir_orig no se pudo determinar
-    expected_run_dir_orig = os.path.join(OUTPUT_PROJECT_DIR, OUTPUT_RUN_NAME)
-    print(f"  Directorio de guardado del run ('actual_run_save_dir_orig') no se determinó o no existe.")
-    print(f"  Intentando verificar la ruta esperada: {expected_run_dir_orig}")
-    if os.path.isdir(expected_run_dir_orig):
-        print(f"  Contenido de la carpeta esperada '{expected_run_dir_orig}': {os.listdir(expected_run_dir_orig)}")
-
-if video_output_path_found_orig and os.path.exists(video_output_path_found_orig):
-    print(f"\n✅ Video procesado guardado exitosamente en:")
-    print(f"   {os.path.abspath(video_output_path_found_orig)}")
-    print("\n   Puedes abrir este archivo con tu reproductor de video.")
-
+    # Verificar duración del video de salida
     try:
-        cap_out_final = cv2.VideoCapture(video_output_path_found_orig)
-        if cap_out_final.isOpened():
-            fps_out_final = cap_out_final.get(cv2.CAP_PROP_FPS)
-            frame_count_out_final = int(cap_out_final.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration_seconds_out_final = frame_count_out_final / fps_out_final if fps_out_final > 0 else 0
+        cap_out_check = cv2.VideoCapture(VIDEO_OUTPUT_PATH_MANUAL)
+        if cap_out_check.isOpened():
+            fps_out_chk = cap_out_check.get(cv2.CAP_PROP_FPS)
+            fc_out_chk = int(cap_out_check.get(cv2.CAP_PROP_FRAME_COUNT))
+            dur_s_out_chk = fc_out_chk / fps_out_chk if fps_out_chk > 0 else 0
             print(f"\n   Verificación del video de salida:")
-            print(
-                f"   Frames: {frame_count_out_final}, Duración: ~{duration_seconds_out_final:.2f}s @ {fps_out_final:.2f} FPS")
-            cap_out_final.release()
-        else:
-            print("\n   No se pudo abrir el video de salida para verificar su duración.")
-    except Exception as e_verif_final:
-        print(f"\n   Error verificando el video de salida: {e_verif_final}")
+            print(f"   Frames: {fc_out_chk}, Duración: ~{dur_s_out_chk:.2f}s @ {fps_out_chk:.2f} FPS")
+            cap_out_check.release()
+    except Exception as e_verif_final_manual:
+        print(f"\n   Error verificando el video de salida: {e_verif_final_manual}")
 else:
-    print("\n⚠️ No se pudo encontrar o confirmar el video de salida procesado.")
-    print("   Verifica la consola por errores durante el procesamiento y el contenido de las carpetas de salida.")
+    print("\n⚠️ No se guardó el video de salida o no se escribieron frames.")
 
-print("\n--- Proceso de inferencia de video en local (Estructura Original) Finalizado ---")
+print("\n--- Proceso de Inferencia de Video Manual Local Finalizado ---")
