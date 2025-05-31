@@ -1,12 +1,11 @@
 ## CarDetection
 # Proyecto de Detección de Objetos y Estimación de Distancia en Video
 
-[![Python Version][python-shield]][python-url]
-[![License: MIT][license-shield]][license-url]
-[![Pytorch][pytorch-shield]][pytorch-url]
-[![Ultralytics YOLOv8][yolov8-shield]][yolov8-url]
-[![OpenCV][opencv-shield]][opencv-url]
-[![Colab Notebook][colab-shield]](https://colab.research.google.com/drive/163xEf8aG36PHvEP31nj0Uj9YdoYOguQc?authuser=2) 
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/) 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT) 
+[![PyTorch](https://img.shields.io/badge/pytorch-%20-violet.svg)](https://pytorch.org/) 
+[![Ultralytics YOLOv8](https://img.shields.io/badge/Ultralytics-YOLOv8-4a0072?logo=ultralytics&logoColor=white)](https://docs.ultralytics.com/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-blue?logo=opencv)](https://opencv.org/)
 
 Este proyecto utiliza el modelo YOLOv8 de Ultralytics para la detección en tiempo real (o en video procesado) de vehículos y otros objetos comunes. Adicionalmente, implementa una estimación de distancia monocular basada en el tamaño conocido de los objetos y los parámetros de la cámara.
 
