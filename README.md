@@ -1,4 +1,28 @@
 ## CarDetection
+# Proyecto de Detección de Objetos y Estimación de Distancia en Video
+
+[![Python Version][python-shield]][python-url]
+[![License: MIT][license-shield]][license-url]
+[![Pytorch][pytorch-shield]][pytorch-url]
+[![Ultralytics YOLOv8][yolov8-shield]][yolov8-url]
+[![OpenCV][opencv-shield]][opencv-url]
+[![Colab Notebook][colab-shield]](https://colab.research.google.com/drive/163xEf8aG36PHvEP31nj0Uj9YdoYOguQc?authuser=2) 
+
+Este proyecto utiliza el modelo YOLOv8 de Ultralytics para la detección en tiempo real (o en video procesado) de vehículos y otros objetos comunes. Adicionalmente, implementa una estimación de distancia monocular basada en el tamaño conocido de los objetos y los parámetros de la cámara.
+
+El desarrollo incluye tanto un script para ejecución local como un notebook de Google Colab para entrenamiento y experimentación en la nube.
+
+## Características Principales
+
+*   **Detección de Múltiples Clases:**
+    *   Utiliza un modelo YOLOv8 fine-tuneado para la detección especializada de vehículos (ej. carros, mototaxis, buses, camiones, motocicletas, vans).
+    *   Complementa con un modelo YOLOv8 pre-entrenado en COCO para detectar objetos comunes como personas, bicicletas y perros.
+*   **Estimación de Distancia:** Calcula una distancia aproximada a los objetos detectados utilizando su tamaño real conocido y la distancia focal de la cámara.
+*   **Procesamiento de Video:** Capaz de procesar archivos de video, aplicando las detecciones y estimaciones de distancia frame a frame, y generando un video de salida con las anotaciones.
+*   **Entrenamiento / Fine-tuning:** Incluye scripts (principalmente en el notebook de Colab) para el fine-tuning de modelos YOLOv8 con datasets personalizados.
+*   **Flexibilidad:** Puede ser ejecutado tanto en un entorno local (con GPU si está disponible) como en Google Colab.
+*   
+
 ## Configuración del Entorno Local
 
 ### Prerrequisitos
@@ -61,50 +85,3 @@ Navega al directorio `src` (o donde esté tu script principal) y ejecuta:
 python process_video_local.py
 **Cómo añadir los Shields (Insignias):**
 
-1.  **Elige tus Shields:** Ve a [shields.io](https://shields.io/). Puedes buscar shields para muchas cosas (versión de Python, licencia, estado de build, etc.).
-2.  **Genera el Markdown:** El sitio te ayudará a generar el código Markdown para cada shield.
-3.  **Copia y Pega:** Copia el Markdown generado y pégalo al principio de tu `README.md`.
-
-**Ejemplos de Markdown para los Shields Incluidos:**
-
-*   **Python Version:**
-    ```markdown
-    [![Python Version][python-shield]][python-url]
-
-    [python-shield]: https://img.shields.io/badge/python-3.8+-blue.svg
-    [python-url]: https://www.python.org/downloads/
-    ```
-*   **License:** (Asegúrate de tener un archivo LICENSE, por ejemplo, con el texto de la licencia MIT)
-    ```markdown
-    [![License: MIT][license-shield]][license-url]
-
-    [license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg
-    [license-url]: https://opensource.org/licenses/MIT
-    ```
-*   **PyTorch:**
-    ```markdown
-    [![Pytorch][pytorch-shield]][pytorch-url]
-
-    [pytorch-shield]: https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white
-    [pytorch-url]: https://pytorch.org/
-    ```
-*   **Ultralytics YOLOv8:**
-    ```markdown
-    [![Ultralytics YOLOv8][yolov8-shield]][yolov8-url]
-
-    [yolov8-shield]: https://img.shields.io/badge/YOLOv8-Ultralytics- সেটাও.svg
-    [yolov8-url]: https://github.com/ultralytics/ultralytics
-    ```
-*   **OpenCV:**
-    ```markdown
-    [![OpenCV][opencv-shield]][opencv-url]
-
-    [opencv-shield]: https://img.shields.io/badge/OpenCV-blue?logo=opencv&logoColor=white
-    [opencv-url]: https://opencv.org/
-    ```
-*   **Colab Notebook (Opcional):** Si haces público tu notebook:
-    ```markdown
-    [![Colab Notebook][colab-shield]](TU_ENLACE_PUBLICO_AL_NOTEBOOK_DE_COLAB)
-
-    [colab-shield]: https://colab.research.google.com/assets/colab-badge.svg
-    ```
