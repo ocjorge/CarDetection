@@ -6,6 +6,7 @@
 [![PyTorch](https://img.shields.io/badge/pytorch-%20-violet.svg)](https://pytorch.org/) 
 [![Ultralytics YOLOv8](https://img.shields.io/badge/Ultralytics-YOLOv8-4a0072?logo=ultralytics&logoColor=white)](https://docs.ultralytics.com/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-blue?logo=opencv)](https://opencv.org/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/) 
 
 Este proyecto utiliza el modelo YOLOv8 de Ultralytics para la detección en tiempo real (o en video procesado) de vehículos y otros objetos comunes. Adicionalmente, implementa una estimación de distancia monocular basada en el tamaño conocido de los objetos y los parámetros de la cámara.
 
