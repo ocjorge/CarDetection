@@ -83,5 +83,5 @@ Antes de ejecutar el script local, asegúrate de configurar las siguientes rutas
 Navega al directorio `src` (o donde esté tu script principal) y ejecuta:
 ```bash
 python process_video_local.py
-**Cómo añadir los Shields (Insignias):**
+
 
